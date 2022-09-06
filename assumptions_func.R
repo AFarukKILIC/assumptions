@@ -2,15 +2,15 @@ if (!require(pacman)) install.packages('pacman')
 pacman::p_load(dplyr, pastecs,mctest, mvnormalTest)
 
 library(dplyr)
-assumptions <- function(x) { #Burada x veri setini ifade etmektedir.
-  #ozet verileri olusturmak icin bir data frame olusturuyoruz.
+assumptions <- function(x) { #Here x refers to your data set
+  #Create data frame for summary 
   descr <- as.data.frame(matrix(NA, nrow = 9, ncol = ncol(x)))  
   rownames(descr) <- c("Number_of_Observations", 
                        "Number_of_missing_values", 
                        "min_value", "max_value", 
                        "mode_value", "median_value", "mean_value",
                        "_skewness_", "_kurtosis_") 
-  #tan?lay?c? istatistikleri hesapl?yoruz. 
+  #Calculate descriptive statistics
   descriptives <- pastecs::stat.desc(x) 
   Mode = function(x) { 
     ta = table(x)
@@ -27,8 +27,8 @@ assumptions <- function(x) { #Burada x veri setini ifade etmektedir.
   missing_mean <- function(x) {
     mean(x, na.rm = T)
   }
-  #Mod fonksiyonu https://www.r-bloggers.com/computing-the-mode-in-r/ adresinden al?nm??t?r.
-  mods <- as.data.frame(apply(as.matrix(x), 2, Mode)) #Mod hesaplayal?m
+  #Mode function was taken from https://www.r-bloggers.com/computing-the-mode-in-r/ 
+  mods <- as.data.frame(apply(as.matrix(x), 2, Mode)) #Calculate mode
   descr[1:4, ] <- descriptives[c(1, 3, 4, 5), ]
   descr[5, ] <- mods[1:ncol(x), ]
   descr[6, ] <- descriptives[8, ]
@@ -36,7 +36,7 @@ assumptions <- function(x) { #Burada x veri setini ifade etmektedir.
   descr[8, ] <- moments::skewness(x, na.rm = T)
   descr[9, ] <- moments::kurtosis(x, na.rm = T)-3
   
-  #VIF ve TV de?erleri hesaplamak icin modelleri tanimlamak gerekiyor.
+  
   x_new <- x
   x_new$rn <- 1:nrow(x)
   model_for_collinearity <-  lm(
@@ -44,11 +44,11 @@ assumptions <- function(x) { #Burada x veri setini ifade etmektedir.
                      paste(colnames(x_new)[1:(ncol(x_new)-1)], collapse = "+"),
                      sep = ""
     )), data=x_new)
-  #VIF ve TV degerlerini hesapliyoruz.
+  #VIF and TV was caldulated
   mc_VIF_TOL <- as.data.frame(mctest::mctest(model_for_collinearity, type = "i")$idiags[,1:2]) 
   mc_CI <- mctest::eigprop(mod = model_for_collinearity)$ci # CI degerini elde ediyoruz.
   
-  #coklu dogrusal baglanti istatistiklerinin ozetini elde ediyoruz.
+  #Summary statistics for multi-collinearity.
   mc_control <- data.frame(min_VIF = min(mc_VIF_TOL$VIF),
                            max_VIF = max(mc_VIF_TOL$VIF),
                            min_TOL = min(mc_VIF_TOL$TOL),
@@ -58,8 +58,8 @@ assumptions <- function(x) { #Burada x veri setini ifade etmektedir.
                            
   )
   
-  #Mahalanobis Uzakligini hesaplayalim
-  #Mahalanobis uzakl?ginin hesaplanmasi icin kayip veri bulunmamalidir.  
+  #Mahalanobis distance calculation
+  #Do not allowed missing values for mahalanobis distance
   distance <- as.matrix(mahalanobis(x, colMeans(x), cov = cov(x)))
   
   Mah_significant <- x %>%
@@ -69,13 +69,13 @@ assumptions <- function(x) { #Burada x veri setini ifade etmektedir.
                                    df = ncol(x), 
                                    lower.tail = F)) %>%
     filter(Mah_p_value <= 0.001)
-  #Mardia'nin basiklik katsayisini hesapliyoruz.
+  #Mardia's kurtosis value and ist p-value
   mardia_kurt <- mvnormalTest::mardia(x)$mv.test[2,]
   
-  #mardia carpiklik katsayisi
+  #Mardia's skewness value and ist p-value
   mardia_skew <- mvnormalTest::mardia(x)$mv.test[1,] 
   
-  #Tanilayici istatistikler, coklu dogrusal baglanti ve Mahalanobis uzakligi hesaplamalari icin bir liste olusturuyoruz.
+  #Summary for all assumptions to report them.
   return(list(descriptives = round(descr, 2), 
               multicollineartiy =  round(mc_control, 2), 
               Mah_significant =  Mah_significant, 
